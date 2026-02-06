@@ -3,8 +3,6 @@ git add .
 
 # 2. Create your first commit
 git commit -m "SUSCRIPCIONES"
-git commit -m "Initial commit for Nezzy Final Edition"
-git commit -m "LOGIN Y ROLES ADMIN Y SA"
 
 # 3. Ensure you are on the main branch
 git branch -M main
