@@ -25,6 +25,8 @@ class User extends Authenticatable
         'email',
         'password',
         'role', // 👈 IMPORTANTE
+        'subscription_id',
+    'subscription_expires_at',
     ];
 
     /**
@@ -74,4 +76,24 @@ return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_SUPER_ADMIN]);    }
             self::ROLE_ADMIN,
         ], true);
     }
+
+    public function subscription()
+{
+    return $this->belongsTo(Subscription::class);
+}
+
+// app/Models/User.php
+
+protected static function booted()
+{
+    static::updating(function ($user) {
+        // Si el subscription_id cambió...
+        if ($user->isDirty('subscription_id') && $user->subscription_id) {
+            $plan = $user->subscription; // Usamos la relación
+            if ($plan) {
+                $user->subscription_expires_at = now()->addDays($plan->duration_days);
+            }
+        }
+    });
+}
 }

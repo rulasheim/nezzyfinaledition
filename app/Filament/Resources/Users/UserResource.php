@@ -8,6 +8,7 @@ use Filament\Forms\Form;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\DateTimePicker; // <--- IMPORTANTE: Faltaba esta línea
 use Filament\Resources\Resource;
 use Filament\Tables\Table;
 use Filament\Tables\Actions\EditAction;
@@ -21,19 +22,18 @@ class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    // Configuración de Navegación (Compatibilidad v3)
     protected static ?string $navigationGroup = 'Administración';
     protected static ?string $navigationLabel = 'Usuarios';
     protected static ?string $navigationIcon = 'heroicon-o-users';
 
     /**
-     * Políticas de acceso básicas
+     * Políticas de acceso: Solo Admin y Super Admin entran al recurso
      */
     public static function canViewAny(): bool
     {
-// Solo Admin y Super Admin ven la lista de usuarios
         return auth()->user()?->role === User::ROLE_ADMIN || 
-               auth()->user()?->role === User::ROLE_SUPER_ADMIN;    }
+               auth()->user()?->role === User::ROLE_SUPER_ADMIN;
+    }
 
     public static function canCreate(): bool
     {
@@ -43,19 +43,17 @@ class UserResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        // Un usuario Admin/Super Admin puede editar a cualquiera
         return auth()->user()?->role === User::ROLE_ADMIN || 
                auth()->user()?->role === User::ROLE_SUPER_ADMIN;
     }
 
     public static function canDelete(Model $record): bool
     {
-        // Verifica si el usuario es Super Admin (Requiere método isSuperAdmin en modelo User)
         return auth()->user()?->isSuperAdmin() ?? false;
     }
 
     /**
-     * Definición del Formulario
+     * Formulario de Usuario
      */
     public static function form(Form $form): Form
     {
@@ -80,12 +78,42 @@ class UserResource extends Resource
                     TextInput::make('password')
                         ->label('Contraseña')
                         ->password()
-                        ->revealable() // <--- Permite ver la contraseña
+                        ->revealable()
                         ->required(fn (string $operation) => $operation === 'create')
                         ->rule(Password::default())
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
                         ->dehydrated(fn ($state) => filled($state)),
                 ])->columns(2),
+
+            // app/Filament/Resources/Users/UserResource.php
+
+Section::make('Suscripción y Pagos')
+    ->description('El vencimiento se calcula automáticamente según el plan elegido.')
+    ->schema([
+        Select::make('subscription_id')
+            ->label('Plan Asignado')
+            ->relationship('subscription', 'name')
+            ->searchable()
+            ->preload()
+            ->live() // Escucha cambios en tiempo real
+            ->afterStateUpdated(function ($state, callable $set) {
+                if (!$state) {
+                    $set('subscription_expires_at', null);
+                    return;
+                }
+                
+                // Buscamos el plan para saber cuántos días sumar
+                $plan = \App\Models\Subscription::find($state);
+                if ($plan) {
+                    $set('subscription_expires_at', now()->addDays($plan->duration_days)->toDateTimeString());
+                }
+            }),
+
+        DateTimePicker::make('subscription_expires_at')
+            ->label('Vencimiento Calculado')
+            ->readonly() // Evita errores manuales, el sistema manda
+            ->helperText('Se calcula sumando los días del plan a partir de hoy.'),
+    ])->columns(2),
 
             Section::make('Seguridad y Roles')
                 ->description('Asignación de permisos dentro del sistema.')
@@ -104,14 +132,14 @@ class UserResource extends Resource
                                 User::ROLE_USER => 'Usuario',
                             ]
                         )
-                        ->disabled(fn () => ! $isSuperAdmin) // Solo Super Admin cambia roles
+                        ->disabled(fn () => ! $isSuperAdmin)
                         ->helperText(fn () => ! $isSuperAdmin ? 'Solo un Super Admin puede cambiar el rol.' : null),
                 ]),
         ]);
     }
 
     /**
-     * Definición de la Tabla
+     * Tabla de Usuarios
      */
     public static function table(Table $table): Table
     {
@@ -129,7 +157,7 @@ class UserResource extends Resource
 
                 TextColumn::make('role')
                     ->label('Rol')
-                    ->badge() // Le da un estilo visual más profesional
+                    ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         User::ROLE_SUPER_ADMIN => 'danger',
                         User::ROLE_ADMIN => 'warning',
@@ -142,21 +170,36 @@ class UserResource extends Resource
                     })
                     ->sortable(),
 
+                    TextColumn::make('subscription.name')
+                ->label('Plan')
+                ->placeholder('Sin Plan')
+                ->sortable(),
+
+            TextColumn::make('subscription_expires_at')
+                ->label('Vencimiento')
+                ->dateTime('d/m/Y')
+                ->sortable()
+                ->badge() // Lo hace resaltar más
+                ->color(fn ($state): string => 
+                    $state && \Illuminate\Support\Carbon::parse($state)->isPast() 
+                        ? 'danger'  // Rojo si ya pasó la fecha
+                        : 'success' // Verde si está vigente
+                )
+                ->icon(fn ($state): string => 
+                    $state && \Illuminate\Support\Carbon::parse($state)->isPast() 
+                        ? 'heroicon-m-x-circle' 
+                        : 'heroicon-m-check-badge'
+                ),
+
                 TextColumn::make('created_at')
                     ->label('Registrado')
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                // Puedes añadir filtros por rol aquí más adelante
-            ])
             ->actions([
                 EditAction::make(),
                 DeleteAction::make(),
-            ])
-            ->bulkActions([
-                // Acciones masivas aquí
             ]);
     }
 
