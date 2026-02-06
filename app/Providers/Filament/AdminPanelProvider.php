@@ -56,9 +56,11 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->widgets([
     \App\Filament\Widgets\UserStatsWidget::class, // Tu nuevo widget arriba
+    \App\Filament\Widgets\SubscriptionStatusWidget::class, // Tu nuevo widget
     \Filament\Widgets\AccountWidget::class,
-    \Filament\Widgets\FilamentInfoWidget::class,
 ])
+
+
             ->authMiddleware([
                 Authenticate::class,
             ]); // Aquí termina la cadena del panel

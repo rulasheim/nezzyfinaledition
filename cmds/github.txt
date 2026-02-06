@@ -2,7 +2,7 @@
 git add .
 
 # 2. Create your first commit
-git commit -m "SUSCRIPCIONES"
+git commit -m "WIDGET SUSCRIPCIONES"
 
 # 3. Ensure you are on the main branch
 git branch -M main
