@@ -1,0 +1,12 @@
+# 1. Add all your project files
+git add .
+
+# 2. Create your first commit
+git commit -m "Initial commit for Nezzy Final Edition"
+git commit -m "LOGIN Y ROLES ADMIN Y SA"
+
+# 3. Ensure you are on the main branch
+git branch -M main
+
+# 4. Push to GitHub
+git push -u origin main
