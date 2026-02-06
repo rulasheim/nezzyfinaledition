@@ -2,6 +2,7 @@
 git add .
 
 # 2. Create your first commit
+git commit -m "WIDGET USUARIO"
 git commit -m "Initial commit for Nezzy Final Edition"
 git commit -m "LOGIN Y ROLES ADMIN Y SA"
 
@@ -10,3 +11,5 @@ git branch -M main
 
 # 4. Push to GitHub
 git push -u origin main
+
+COMIT ROLES

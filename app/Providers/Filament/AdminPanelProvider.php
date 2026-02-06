@@ -54,6 +54,11 @@ class AdminPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            ->widgets([
+    \App\Filament\Widgets\UserStatsWidget::class, // Tu nuevo widget arriba
+    \Filament\Widgets\AccountWidget::class,
+    \Filament\Widgets\FilamentInfoWidget::class,
+])
             ->authMiddleware([
                 Authenticate::class,
             ]); // Aquí termina la cadena del panel
