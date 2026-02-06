@@ -4,10 +4,11 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\SubscriptionResource\Pages;
 use App\Models\Subscription;
+use App\Models\User; // <--- IMPORTANTE: Importamos el modelo User para los roles
 use Filament\Forms\Form;
-use Filament\Forms\Components\Section; // Importante
-use Filament\Forms\Components\TextInput; // Importante
-use Filament\Forms\Components\Toggle; // Importante
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -21,6 +22,15 @@ class SubscriptionResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-credit-card';
     protected static ?string $navigationLabel = 'Planes de Suscripción';
     protected static ?string $navigationGroup = 'Administración';
+
+    /**
+     * Solo Admin y Super Admin pueden ver y gestionar los planes
+     */
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->role === User::ROLE_ADMIN || 
+               auth()->user()?->role === User::ROLE_SUPER_ADMIN;
+    }
 
     public static function form(Form $form): Form
     {
@@ -63,7 +73,7 @@ class SubscriptionResource extends Resource
 
                 TextColumn::make('price')
                     ->label('Precio')
-                    ->money('USD') // O la moneda que uses
+                    ->money('USD')
                     ->sortable(),
 
                 TextColumn::make('duration_days')
@@ -78,10 +88,7 @@ class SubscriptionResource extends Resource
 
                 TextColumn::make('users_count')
                     ->label('Usuarios')
-                    ->counts('users'), // Requiere la relación en el modelo Subscription
-            ])
-            ->filters([
-                //
+                    ->counts('users'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

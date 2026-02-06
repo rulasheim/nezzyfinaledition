@@ -2,10 +2,21 @@
 git add .
 
 # 2. Create your first commit
-git commit -m "WIDGET SUSCRIPCIONES"
+git commit -m "MODULO BINGENERADOR"
 
 # 3. Ensure you are on the main branch
 git branch -M main
 
 # 4. Push to GitHub
 git push -u origin main
+
+
+
+git add .
+
+git commit -m "MODULO BINGENERADOR"
+
+git branch -M main
+
+git push -u origin main
+

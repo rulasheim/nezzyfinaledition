@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Models\Payment;
+
 
 class User extends Authenticatable
 {
@@ -82,17 +84,43 @@ return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_SUPER_ADMIN]);    }
     return $this->belongsTo(Subscription::class);
 }
 
+// Dentro de app/Models/User.php
+
+public function payments()
+{
+    return $this->hasMany(Payment::class);
+}
+
+
+// Dentro de la clase User
 // app/Models/User.php
 
 protected static function booted()
 {
-    static::updating(function ($user) {
-        // Si el subscription_id cambió...
-        if ($user->isDirty('subscription_id') && $user->subscription_id) {
-            $plan = $user->subscription; // Usamos la relación
+    // Función interna para registrar el pago
+    $registrarPago = function ($user) {
+        if ($user->subscription_id) {
+            $plan = \App\Models\Subscription::find($user->subscription_id);
             if ($plan) {
-                $user->subscription_expires_at = now()->addDays($plan->duration_days);
+                \App\Models\Payment::create([
+                    'user_id' => $user->id,
+                    'subscription_id' => $plan->id,
+                    'amount' => $plan->price,
+                    'payment_method' => 'admin_manual',
+                ]);
             }
+        }
+    };
+
+    // 1. Al CREAR un usuario nuevo con suscripción
+    static::created(function ($user) use ($registrarPago) {
+        $registrarPago($user);
+    });
+
+    // 2. Al ACTUALIZAR un usuario existente
+    static::updated(function ($user) use ($registrarPago) {
+        if ($user->isDirty('subscription_id')) {
+            $registrarPago($user);
         }
     });
 }

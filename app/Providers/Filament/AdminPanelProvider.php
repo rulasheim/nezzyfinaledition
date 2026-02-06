@@ -56,6 +56,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->widgets([
     \App\Filament\Widgets\UserStatsWidget::class, // Tu nuevo widget arriba
+    \App\Filament\Widgets\RevenueStatsWidget::class, // Widget de ventas totales
     \App\Filament\Widgets\SubscriptionStatusWidget::class, // Tu nuevo widget
     \Filament\Widgets\AccountWidget::class,
 ])
