@@ -14,7 +14,7 @@ git push -u origin main
 
 git add .
 
-git commit -m "control"
+git commit -m "widget usuarios suscritos"
 
 git branch -M main
 
