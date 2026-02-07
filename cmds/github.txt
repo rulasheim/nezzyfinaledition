@@ -14,7 +14,7 @@ git push -u origin main
 
 git add .
 
-git commit -m "widget usuarios suscritos"
+git commit -m "recurso anuncios"
 
 git branch -M main
 
