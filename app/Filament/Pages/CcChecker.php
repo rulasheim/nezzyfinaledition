@@ -16,7 +16,7 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Livewire\Attributes\On;
 use Illuminate\Support\Str;
-use Illuminate\Support\Carbon; // Importante para manejar fechas
+use Illuminate\Support\Carbon;
 
 class CcChecker extends Page implements HasForms
 {
@@ -30,19 +30,17 @@ class CcChecker extends Page implements HasForms
     protected static string $view = 'filament.pages.cc-checker';
 
     /**
-     * Restricción de acceso a la página y al menú
+     * Restricción de acceso: Solo Admins o Usuarios con suscripción activa.
      */
     public static function canAccess(): bool
     {
         /** @var \App\Models\User $user */
         $user = auth()->user();
 
-        // Los administradores siempre tienen acceso
         if ($user->isAdmin()) {
             return true;
         }
 
-        // Suscriptores: deben tener plan activo y no estar vencidos
         return $user->subscription_id && 
                $user->subscription_expires_at && 
                Carbon::parse($user->subscription_expires_at)->isFuture();
@@ -55,16 +53,15 @@ class CcChecker extends Page implements HasForms
 
     public function mount(): void
     {
-        // Doble verificación de seguridad al cargar
         if (!static::canAccess()) {
             abort(403, 'Tu suscripción ha expirado o no tienes acceso a este Gate.');
         }
 
         $this->form->fill([
             'gen_bin' => '456789xxxxxxxxx',
-            'quantity' => 10,
             'gen_mes' => 'rnd',
-            'gen_anio' => 'rnd'
+            'gen_anio' => 'rnd',
+            'cvv_mode' => 'rnd', 
         ]);
     }
 
@@ -74,34 +71,62 @@ class CcChecker extends Page implements HasForms
             ->schema([
                 Grid::make(2)->schema([
                     Section::make('Motor de Generación')
-                        ->description('Configura el BIN para generar la lista.')
+                        ->description('Configura el BIN y el CVV para la lista fija de 10.')
                         ->columnSpan(1)
+                        ->icon('heroicon-m-cpu-chip') // Icono moderno para la sección
                         ->schema([
                             TextInput::make('gen_bin')
                                 ->label('BIN / Patrón')
-                                ->required(),
+                                ->placeholder('456789xxxxxxxxx')
+                                ->required()
+                                ->extraInputAttributes(['class' => 'font-mono tracking-widest']), // Estilo mono para el BIN
+                            
                             Grid::make(2)->schema([
                                 Select::make('gen_mes')
                                     ->label('Mes')
-                                    ->options(['rnd' => 'Random', '01'=>'01','02'=>'02','03'=>'03','04'=>'04','05'=>'05','06'=>'06','07'=>'07','08'=>'08','09'=>'09','10'=>'10','11'=>'11','12'=>'12']),
+                                    ->native(false) // Selector moderno estilo Filament
+                                    ->prefix('📅')
+                                    ->options(['rnd' => '🎲 Random', '01'=>'01','02'=>'02','03'=>'03','04'=>'04','05'=>'05','06'=>'06','07'=>'07','08'=>'08','09'=>'09','10'=>'10','11'=>'11','12'=>'12']),
                                 Select::make('gen_anio')
                                     ->label('Año')
+                                    ->native(false) // Selector moderno estilo Filament
+                                    ->prefix('🗓️')
                                     ->options(function(){
                                         $y = date('Y');
-                                        $opts = ['rnd' => 'Random'];
+                                        $opts = ['rnd' => '🎲 Random'];
                                         for($i=0; $i<8; $i++) $opts[$y+$i] = $y+$i;
                                         return $opts;
                                     }),
                             ]),
-                            TextInput::make('quantity')
-                                ->label('Cantidad a Generar')
-                                ->numeric()
-                                ->default(10),
+
+                            // Configuración de CVV Modernizada
+                            Grid::make(2)->schema([
+                                Select::make('cvv_mode')
+                                    ->label('Modo CVV')
+                                    ->native(false)
+                                    ->prefix('🔒')
+                                    ->options([
+                                        'rnd' => '🎲 Random',
+                                        'manual' => '✍️ Manual',
+                                    ])
+                                    ->live(), 
+                                
+                                TextInput::make('gen_cvv')
+                                    ->label('CVV Fijo')
+                                    ->placeholder('000')
+                                    ->numeric()
+                                    ->prefix('🔑')
+                                    ->maxLength(4)
+                                    ->visible(fn ($get) => $get('cvv_mode') === 'manual')
+                                    ->required(fn ($get) => $get('cvv_mode') === 'manual'),
+                            ]),
+
                             \Filament\Forms\Components\Actions::make([
                                 \Filament\Forms\Components\Actions\Action::make('generate_now')
-                                    ->label('Generar y Cargar')
+                                    ->label('Generar y Cargar (10)')
                                     ->icon('heroicon-m-sparkles')
                                     ->color('success')
+                                    ->size('lg') // Botón más prominente
                                     ->action(fn () => $this->runInternalGeneration()),
                             ]),
                         ]),
@@ -109,12 +134,14 @@ class CcChecker extends Page implements HasForms
                     Section::make('Cola de Procesamiento')
                         ->description('Tarjetas listas para el Service.')
                         ->columnSpan(1)
+                        ->icon('heroicon-m-list-bullet')
                         ->schema([
                             Textarea::make('ccs')
                                 ->label('Lista CCs')
                                 ->rows(10)
                                 ->placeholder("cc|mm|yyyy|cvv")
-                                ->required(),
+                                ->required()
+                                ->extraInputAttributes(['class' => 'font-mono text-sm leading-relaxed']),
                         ]),
                 ])
             ])
@@ -125,19 +152,27 @@ class CcChecker extends Page implements HasForms
     {
         $settings = $this->data;
         $generated = [];
-        $qty = $settings['quantity'] ?? 10;
+        $qty = 10; 
         
         for ($i = 0; $i < $qty; $i++) {
             $cc = $this->generateLuhn($settings['gen_bin']);
             $mes = ($settings['gen_mes'] === 'rnd') ? str_pad(rand(1, 12), 2, '0', STR_PAD_LEFT) : $settings['gen_mes'];
             $anio = ($settings['gen_anio'] === 'rnd') ? rand((int)date('Y'), (int)date('Y')+5) : $settings['gen_anio'];
-            $cvv = rand(100, 999);
+            
+            $cvv = ($settings['cvv_mode'] === 'manual' && !empty($settings['gen_cvv'])) 
+                ? str_pad($settings['gen_cvv'], 3, '0', STR_PAD_LEFT) 
+                : rand(100, 999);
+
             $generated[] = "$cc|$mes|$anio|$cvv";
         }
 
         $this->data['ccs'] = implode("\n", $generated);
         $this->form->fill($this->data);
-        Notification::make()->success()->title("Generadas $qty tarjetas con éxito.")->send();
+        Notification::make()
+            ->success()
+            ->icon('heroicon-o-check-badge')
+            ->title("Generadas 10 tarjetas con éxito.")
+            ->send();
     }
 
     protected function generateLuhn($pattern)
@@ -160,14 +195,14 @@ class CcChecker extends Page implements HasForms
         return [
             Action::make('start')
                 ->label('Iniciar Epic Gate')
-                ->icon('heroicon-o-play')
+                ->icon('heroicon-o-play-circle')
                 ->color('primary')
                 ->disabled(fn() => $this->isProcessing)
                 ->action(fn() => $this->startChecking()),
 
             Action::make('stop')
                 ->label('Detener')
-                ->icon('heroicon-o-stop')
+                ->icon('heroicon-o-stop-circle')
                 ->color('danger')
                 ->visible(fn() => $this->isProcessing)
                 ->action(fn() => $this->isProcessing = false),
@@ -187,13 +222,12 @@ class CcChecker extends Page implements HasForms
     #[On('process-card')]
     public function processCard()
     {
-        // Verificación de seguridad en cada paso para evitar bypass si expira durante el proceso
         if (!static::canAccess()) {
             $this->isProcessing = false;
             Notification::make()
                 ->danger()
-                ->title('Acceso Denegado')
-                ->body('Tu suscripción ha vencido mientras procesabas. Por favor renueva.')
+                ->title('Suscripción Expirada')
+                ->body('Tu acceso ha terminado. Por favor, renueva tu plan.')
                 ->persistent()
                 ->send();
             return;

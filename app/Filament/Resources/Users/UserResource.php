@@ -8,7 +8,7 @@ use Filament\Forms\Form;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\DateTimePicker; // <--- IMPORTANTE: Faltaba esta línea
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Resources\Resource;
 use Filament\Tables\Table;
 use Filament\Tables\Actions\EditAction;
@@ -26,9 +26,6 @@ class UserResource extends Resource
     protected static ?string $navigationLabel = 'Usuarios';
     protected static ?string $navigationIcon = 'heroicon-o-users';
 
-    /**
-     * Políticas de acceso: Solo Admin y Super Admin entran al recurso
-     */
     public static function canViewAny(): bool
     {
         return auth()->user()?->role === User::ROLE_ADMIN || 
@@ -52,9 +49,6 @@ class UserResource extends Resource
         return auth()->user()?->isSuperAdmin() ?? false;
     }
 
-    /**
-     * Formulario de Usuario
-     */
     public static function form(Form $form): Form
     {
         $isSuperAdmin = auth()->user()?->isSuperAdmin() ?? false;
@@ -62,14 +56,17 @@ class UserResource extends Resource
         return $form->schema([
             Section::make('Datos del usuario')
                 ->description('Información básica y credenciales de acceso.')
+                ->icon('heroicon-m-user-circle')
                 ->schema([
                     TextInput::make('name')
-                        ->label('Nombre')
+                        ->label('Nombre Completo')
+                        ->prefixIcon('heroicon-m-user')
                         ->required()
                         ->maxLength(255),
 
                     TextInput::make('email')
-                        ->label('Email')
+                        ->label('Correo Electrónico')
+                        ->prefixIcon('heroicon-m-envelope')
                         ->email()
                         ->required()
                         ->maxLength(255)
@@ -79,68 +76,69 @@ class UserResource extends Resource
                         ->label('Contraseña')
                         ->password()
                         ->revealable()
+                        ->prefixIcon('heroicon-m-lock-closed')
                         ->required(fn (string $operation) => $operation === 'create')
                         ->rule(Password::default())
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
                         ->dehydrated(fn ($state) => filled($state)),
                 ])->columns(2),
 
-            // app/Filament/Resources/Users/UserResource.php
+            Section::make('Suscripción y Pagos')
+                ->description('Control de planes y expiración automática.')
+                ->icon('heroicon-m-credit-card')
+                ->schema([
+                    Select::make('subscription_id')
+                        ->label('Plan Asignado')
+                        ->relationship('subscription', 'name')
+                        ->native(false) // Desplegable moderno
+                        ->searchable()
+                        ->preload()
+                        ->live()
+                        ->prefixIcon('heroicon-m-sparkles')
+                        ->afterStateUpdated(function ($state, callable $set) {
+                            if (!$state) {
+                                $set('subscription_expires_at', null);
+                                return;
+                            }
+                            $plan = \App\Models\Subscription::find($state);
+                            if ($plan) {
+                                $set('subscription_expires_at', now()->addDays($plan->duration_days)->toDateTimeString());
+                            }
+                        }),
 
-Section::make('Suscripción y Pagos')
-    ->description('El vencimiento se calcula automáticamente según el plan elegido.')
-    ->schema([
-        Select::make('subscription_id')
-            ->label('Plan Asignado')
-            ->relationship('subscription', 'name')
-            ->searchable()
-            ->preload()
-            ->live() // Escucha cambios en tiempo real
-            ->afterStateUpdated(function ($state, callable $set) {
-                if (!$state) {
-                    $set('subscription_expires_at', null);
-                    return;
-                }
-                
-                // Buscamos el plan para saber cuántos días sumar
-                $plan = \App\Models\Subscription::find($state);
-                if ($plan) {
-                    $set('subscription_expires_at', now()->addDays($plan->duration_days)->toDateTimeString());
-                }
-            }),
-
-        DateTimePicker::make('subscription_expires_at')
-            ->label('Vencimiento Calculado')
-            ->readonly() // Evita errores manuales, el sistema manda
-            ->helperText('Se calcula sumando los días del plan a partir de hoy.'),
-    ])->columns(2),
+                    DateTimePicker::make('subscription_expires_at')
+                        ->label('Vencimiento del Acceso')
+                        ->prefixIcon('heroicon-m-calendar-days')
+                        ->readonly()
+                        ->helperText('Calculado automáticamente según la duración del plan.'),
+                ])->columns(2),
 
             Section::make('Seguridad y Roles')
-                ->description('Asignación de permisos dentro del sistema.')
+                ->description('Permisos de nivel administrativo.')
+                ->icon('heroicon-m-shield-check')
                 ->schema([
                     Select::make('role')
-                        ->label('Rol')
+                        ->label('Nivel de Acceso')
+                        ->native(false) // Desplegable moderno
                         ->required()
+                        ->prefixIcon('heroicon-m-identification')
                         ->default(User::ROLE_USER)
                         ->options(fn () => $isSuperAdmin
                             ? [
-                                User::ROLE_USER => 'Usuario',
-                                User::ROLE_ADMIN => 'Admin',
-                                User::ROLE_SUPER_ADMIN => 'Super Admin',
+                                User::ROLE_USER => 'Usuario Estándar',
+                                User::ROLE_ADMIN => 'Administrador',
+                                User::ROLE_SUPER_ADMIN => 'Super Admin (Acceso Total)',
                             ]
                             : [
-                                User::ROLE_USER => 'Usuario',
+                                User::ROLE_USER => 'Usuario Estándar',
                             ]
                         )
                         ->disabled(fn () => ! $isSuperAdmin)
-                        ->helperText(fn () => ! $isSuperAdmin ? 'Solo un Super Admin puede cambiar el rol.' : null),
+                        ->helperText(fn () => ! $isSuperAdmin ? 'Solo el Super Admin puede modificar roles jerárquicos.' : null),
                 ]),
         ]);
     }
 
-    /**
-     * Tabla de Usuarios
-     */
     public static function table(Table $table): Table
     {
         return $table
@@ -148,10 +146,13 @@ Section::make('Suscripción y Pagos')
                 TextColumn::make('name')
                     ->label('Nombre')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->weight('bold'),
 
                 TextColumn::make('email')
                     ->label('Email')
+                    ->icon('heroicon-m-envelope')
+                    ->copyable()
                     ->searchable()
                     ->sortable(),
 
@@ -170,30 +171,32 @@ Section::make('Suscripción y Pagos')
                     })
                     ->sortable(),
 
-                    TextColumn::make('subscription.name')
-                ->label('Plan')
-                ->placeholder('Sin Plan')
-                ->sortable(),
+                TextColumn::make('subscription.name')
+                    ->label('Plan Actual')
+                    ->placeholder('Sin Plan')
+                    ->badge()
+                    ->color('gray')
+                    ->sortable(),
 
-            TextColumn::make('subscription_expires_at')
-                ->label('Vencimiento')
-                ->dateTime('d/m/Y')
-                ->sortable()
-                ->badge() // Lo hace resaltar más
-                ->color(fn ($state): string => 
-                    $state && \Illuminate\Support\Carbon::parse($state)->isPast() 
-                        ? 'danger'  // Rojo si ya pasó la fecha
-                        : 'success' // Verde si está vigente
-                )
-                ->icon(fn ($state): string => 
-                    $state && \Illuminate\Support\Carbon::parse($state)->isPast() 
-                        ? 'heroicon-m-x-circle' 
-                        : 'heroicon-m-check-badge'
-                ),
+                TextColumn::make('subscription_expires_at')
+                    ->label('Vencimiento')
+                    ->dateTime('d/m/Y')
+                    ->sortable()
+                    ->badge()
+                    ->color(fn ($state): string => 
+                        $state && \Illuminate\Support\Carbon::parse($state)->isPast() 
+                            ? 'danger' 
+                            : 'success'
+                    )
+                    ->icon(fn ($state): string => 
+                        $state && \Illuminate\Support\Carbon::parse($state)->isPast() 
+                            ? 'heroicon-m-x-circle' 
+                            : 'heroicon-m-check-badge'
+                    ),
 
                 TextColumn::make('created_at')
                     ->label('Registrado')
-                    ->dateTime('d/m/Y H:i')
+                    ->dateTime('d/m/Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

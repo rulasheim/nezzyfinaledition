@@ -15,21 +15,29 @@ class SubscriptionStatusWidget extends BaseWidget
         $expiresAt = $user->subscription_expires_at;
         $planName = $user->subscription?->name ?? 'Sin Plan Activo';
 
+        // Verificamos si la fecha ya pasó
         $isExpired = $expiresAt ? Carbon::parse($expiresAt)->isPast() : true;
+
+        // Calculamos la diferencia asegurando que sea un número entero
+        // diffInDays devuelve la diferencia absoluta en días naturales
         $daysRemaining = $expiresAt && !$isExpired 
-            ? now()->diffInDays(Carbon::parse($expiresAt)) 
+            ? (int) now()->diffInDays(Carbon::parse($expiresAt)) 
             : 0;
 
         return [
             Stat::make('Mi Plan', $planName)
                 ->description($isExpired ? 'Acceso expirado' : 'Suscripción activa')
-                ->color($isExpired ? 'danger' : 'success'),
+                ->color($isExpired ? 'danger' : 'success')
+                ->icon('heroicon-m-credit-card'),
 
-            Stat::make('Días Restantes', $isExpired ? '0' : $daysRemaining)
-                ->description('Días de acceso premium')
-                ->color($daysRemaining <= 3 ? 'warning' : 'info'),
+            Stat::make('Días Restantes', (string) $daysRemaining)
+                ->description($isExpired ? 'Renueva para continuar' : 'Días de acceso Premium')
+                ->color($isExpired ? 'danger' : ($daysRemaining <= 3 ? 'warning' : 'primary'))
+                ->icon('heroicon-m-clock'),
 
-            Stat::make('Vencimiento', $expiresAt ? Carbon::parse($expiresAt)->format('d/m/Y') : 'N/A'),
+            Stat::make('Vencimiento', $expiresAt ? Carbon::parse($expiresAt)->format('d/m/Y') : 'N/A')
+                ->description('Fecha de término del plan')
+                ->icon('heroicon-m-calendar'),
         ];
     }
 }

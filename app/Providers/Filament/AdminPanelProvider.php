@@ -40,8 +40,8 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
+                // AccountWidget::class,
+               // FilamentInfoWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -58,7 +58,7 @@ class AdminPanelProvider extends PanelProvider
     \App\Filament\Widgets\UserStatsWidget::class, // Tu nuevo widget arriba
     \App\Filament\Widgets\RevenueStatsWidget::class, // Widget de ventas totales
     \App\Filament\Widgets\SubscriptionStatusWidget::class, // Tu nuevo widget
-    \Filament\Widgets\AccountWidget::class,
+    //\Filament\Widgets\AccountWidget::class,
 ])
 
 
