@@ -16,6 +16,7 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Livewire\Attributes\On;
 use Illuminate\Support\Str;
+use Illuminate\Support\Carbon; // Importante para manejar fechas
 
 class CcChecker extends Page implements HasForms
 {
@@ -28,6 +29,25 @@ class CcChecker extends Page implements HasForms
 
     protected static string $view = 'filament.pages.cc-checker';
 
+    /**
+     * Restricción de acceso a la página y al menú
+     */
+    public static function canAccess(): bool
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
+        // Los administradores siempre tienen acceso
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        // Suscriptores: deben tener plan activo y no estar vencidos
+        return $user->subscription_id && 
+               $user->subscription_expires_at && 
+               Carbon::parse($user->subscription_expires_at)->isFuture();
+    }
+
     public ?array $data = [];
     public array $logs = [];
     public array $queue = [];
@@ -35,6 +55,11 @@ class CcChecker extends Page implements HasForms
 
     public function mount(): void
     {
+        // Doble verificación de seguridad al cargar
+        if (!static::canAccess()) {
+            abort(403, 'Tu suscripción ha expirado o no tienes acceso a este Gate.');
+        }
+
         $this->form->fill([
             'gen_bin' => '456789xxxxxxxxx',
             'quantity' => 10,
@@ -162,6 +187,18 @@ class CcChecker extends Page implements HasForms
     #[On('process-card')]
     public function processCard()
     {
+        // Verificación de seguridad en cada paso para evitar bypass si expira durante el proceso
+        if (!static::canAccess()) {
+            $this->isProcessing = false;
+            Notification::make()
+                ->danger()
+                ->title('Acceso Denegado')
+                ->body('Tu suscripción ha vencido mientras procesabas. Por favor renueva.')
+                ->persistent()
+                ->send();
+            return;
+        }
+
         if (empty($this->queue) || !$this->isProcessing) {
             $this->isProcessing = false;
             return;
@@ -171,7 +208,6 @@ class CcChecker extends Page implements HasForms
         $checker = new EpicSwordsGate();
         $res = $checker->check($cc);
 
-        // --- Lógica de Extracción de Referencia del Servidor ---
         $rawArray = is_array($res['raw']) ? $res['raw'] : json_decode($res['raw'], true);
         $serverRef = 'N/A';
 
@@ -185,7 +221,7 @@ class CcChecker extends Page implements HasForms
             'cc' => $cc,
             'result' => $res['result'],
             'message' => $res['message'],
-            'server_ref' => $serverRef, // Referencia no intrusiva
+            'server_ref' => $serverRef,
             'raw' => is_array($res['raw']) ? json_encode($res['raw'], JSON_PRETTY_PRINT) : $res['raw'],
             'time' => now()->format('H:i:s'),
             'color' => match($res['result']) { 'LIVE' => 'success', 'DEAD' => 'danger', default => 'warning' }

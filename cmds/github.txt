@@ -14,9 +14,13 @@ git push -u origin main
 
 git add .
 
-git commit -m "MODULO GATE AUTH"
+git commit -m "ACCESO A GATES CONTROLADO"
 
 git branch -M main
 
 git push -u origin main
+
+NOTA:FALTA GUARDAR SCRAPPING DE LIVES DE USUARIO, HACER QUE SOLO SUSCRIPTORES 
+TENGAN ACCESO A GATES, 
+
 
